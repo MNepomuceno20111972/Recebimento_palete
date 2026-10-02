@@ -12,7 +12,7 @@
 <html lang="pt-BR"><head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Recebimento de Paletes — Vale Palete</title>
+<title>Recebimento de Paletes v2 — Vale Palete</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A7%BE%3C/text%3E%3C/svg%3E">
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
@@ -233,9 +233,29 @@ tr:hover td{background:var(--bg2)}
 <div class="ovl noprint" id="ovlConf"><div class="modal wide">
   <h3>Confira antes de emitir</h3>
   <div id="confBody"></div>
-  <div class="msg inf" style="margin-top:14px">Depois de emitido, o vale não pode ser alterado. Se tiver erro, a Reversa cancela e você emite outro.</div>
+  <div class="msg inf" style="margin-top:14px">Confira com o palete na frente. Se depois achar erro, avise: o ADM corrige enquanto o vale não foi pago, ou a Reversa cancela e você emite outro.</div>
   <div class="row"><button class="btn" id="btnConfirma" onclick="emitirVale()">Confirmar e imprimir</button>
     <button class="btn gry" onclick="fechar('ovlConf')">Voltar e corrigir</button></div>
+</div></div>
+
+<!-- MODAL EDIÇÃO (ADM) -->
+<div class="ovl noprint" id="ovlEdit"><div class="modal wide">
+  <h3 id="edTit">Editar vale</h3>
+  <div class="msg" id="msgEd"></div>
+  <div class="grid">
+    <div class="fld s2"><label>Nome da empresa *</label><input id="eEmpresa" maxlength="120"></div>
+    <div class="fld"><label>CNPJ / CPF *</label><input id="eCnpj" maxlength="18" oninput="mascaraDoc(this)"></div>
+    <div class="fld"><label>Motorista *</label><input id="eMotorista" maxlength="80"></div>
+    <div class="fld"><label>Nota fiscal</label><input id="eNf" maxlength="30"></div>
+    <div class="fld"><label>Colaborador *</label><input id="eColab" maxlength="80"></div>
+    <div class="fld"><label>Cargo / Função</label><input id="eCargo" maxlength="60"></div>
+  </div>
+  <div class="qtd-grid" id="eQtd" style="margin-top:12px"></div>
+  <div class="fld" style="margin-top:12px"><label>Observação</label><textarea id="eObs" maxlength="300"></textarea></div>
+  <div class="fld" style="margin-top:12px"><label>Motivo da correção *</label><input id="eMotivo" maxlength="200" placeholder="Ex: modelo lançado errado, conferido no físico"></div>
+  <div class="msg inf" style="margin-top:12px">Ao salvar, a folha corrigida já sai para impressão. Recolha a folha antiga com o fornecedor.</div>
+  <div class="row"><button class="btn" id="btnEdSalva" onclick="salvarEdicao()">Salvar e imprimir</button>
+    <button class="btn gry" onclick="fechar('ovlEdit')">Voltar</button></div>
 </div></div>
 
 <!-- MODAL DETALHE -->
@@ -512,13 +532,14 @@ function mostrarSucesso(v){
 // FOLHA DO VALE (impressão)
 // ═══════════════════════════════════════════════════════
 function imprimirVale(v,segundaVia){
+  const viaTxt = segundaVia===true ? '2ª VIA · REIMPRESSÃO' : (segundaVia||'');
   if(!v)return;
   const linhas=ITENS.map(i=>`<tr><td>${i.n}</td><td style="text-align:center;font-weight:700">${v.itens?.[i.k]?fmt(v.itens[i.k]):'—'}</td></tr>`).join('');
   $('printArea').innerHTML=`<div class="pdoc">
     <h1>CONTROLE DE MATERIAL CIRCULANTE · VALE PALETE</h1>
     <div class="psub">Oba Hortifruti · CD Sumaré · Logística Reversa</div>
     <div class="pnum">Nº ${esc(v.id)}</div>
-    ${segundaVia?'<div class="via">2ª VIA · REIMPRESSÃO</div>':''}
+    ${viaTxt?`<div class="via">${viaTxt}</div>`:''}
     ${v.status==='Cancelado'?'<div class="via">VALE CANCELADO · SEM VALIDADE</div>':''}
     <table>
       <tr><th>Razão Social</th><td colspan="3">${EMPRESA.razao}</td></tr>
@@ -609,13 +630,16 @@ async function abrirVale(id){
       ${v.obs?`<b>Observação</b><span>${esc(v.obs)}</span>`:''}
       ${pg?`<b>Pagamento</b><span>${brData(pg.data)} · ${esc(pg.usuario||'')}${pg.movId?' · '+esc(pg.movId):''}</span>`:''}
       ${cx?`<b>Cancelamento</b><span>${brData(cx.data)} · ${esc(cx.usuario||'')} · ${esc(cx.motivo||'')}</span>`:''}
+      ${v.historico?`<b>Correções</b><span>${Object.values(v.historico).sort((a,b)=>a.ts-b.ts).map(h=>`${brData(h.data)} ${esc(h.hora||'')} · ${esc(h.usuario)} · ${esc(h.motivo)}<br><span style="color:var(--mut);font-size:12px">${esc(h.resumo||'')}</span>`).join('<br>')}</span>`:''}
     </div>
     <table style="margin-top:14px"><tr><th>Modelo</th><th style="text-align:right">Quantidade</th></tr>
       ${ITENS.filter(i=>v.itens?.[i.k]).map(i=>`<tr><td>${i.n}</td><td style="text-align:right;font-weight:700">${fmt(v.itens[i.k])}</td></tr>`).join('')}
       <tr><td><b>Total</b></td><td style="text-align:right;font-weight:800">${fmt(v.total)}</td></tr></table>`;
     const podeCancelar=(CU.role==='adm'||CU.role==='rev')&&v.status==='Aberto';
     $('detAcoes').innerHTML=`<button class="btn" onclick="imprimirVale(_det,true)">🖨 Reimprimir (2ª via)</button>
+      ${CU.role==='adm'&&v.status==='Aberto'?'<button class="btn out" onclick="abrirEdicao()">✏️ Editar</button>':''}
       ${podeCancelar?'<button class="btn dng" onclick="cancelarVale()">Cancelar vale</button>':''}
+      ${CU.role==='adm'&&v.status==='Aberto'?'<button class="btn dng" onclick="excluirVale()">🗑 Excluir</button>':''}
       <button class="btn gry" onclick="fechar('ovlDet')">Fechar</button>`;
     $('ovlDet').classList.add('on');
   }catch(e){aviso('msgCons','Erro ao buscar: '+esc(e.message),'err');}
@@ -639,6 +663,85 @@ async function cancelarVale(){
     fechar('ovlDet');_listaTs=0;carregarLista(true);
     aviso('msgCons',`Vale <b>${esc(id)}</b> cancelado.`,'ok');
   }catch(e){alert('Erro ao cancelar: '+e.message);}
+}
+
+
+// ═══════════════════════════════════════════════════════
+// v2 · EDIÇÃO E EXCLUSÃO (só ADM, só vale em aberto)
+// Vale pago não se edita nem se exclui aqui: ele já tem baixa no PaletCD.
+// ═══════════════════════════════════════════════════════
+const CAMPOS_ED=[['empresa','eEmpresa','Empresa'],['cnpj','eCnpj','CNPJ/CPF'],['motorista','eMotorista','Motorista'],
+  ['nf','eNf','NF'],['colaborador','eColab','Colaborador'],['cargo','eCargo','Cargo'],['obs','eObs','Obs']];
+function abrirEdicao(){
+  const v=_det;if(!v||CU.role!=='adm'||v.status!=='Aberto')return;
+  $('edTit').textContent='Editar '+v.id;
+  CAMPOS_ED.forEach(([k,id])=>$(id).value=v[k]||'');
+  $('eQtd').innerHTML=ITENS.map(i=>`<div class="qtd"><b>${i.n}</b><input type="number" min="0" step="1" id="eq-${i.k}" value="${v.itens?.[i.k]||0}" onfocus="this.select()"></div>`).join('');
+  $('eMotivo').value='';aviso('msgEd','');
+  fechar('ovlDet');$('ovlEdit').classList.add('on');
+}
+async function salvarEdicao(){
+  const v=_det;if(!v)return;
+  const novo={};CAMPOS_ED.forEach(([k,id])=>novo[k]=lim($(id).value));
+  const itens={};ITENS.forEach(i=>{const q=Math.max(0,parseInt($('eq-'+i.k).value)||0);if(q>0)itens[i.k]=q;});
+  const motivo=lim($('eMotivo').value);
+  const erros=[];
+  if(!novo.empresa)erros.push('empresa');
+  const dd=soDig(novo.cnpj).length;if(dd!==11&&dd!==14)erros.push('CNPJ/CPF');
+  if(!novo.motorista)erros.push('motorista');
+  if(!novo.colaborador)erros.push('colaborador');
+  if(somaItens(itens)<1)erros.push('quantidade');
+  if(!motivo)erros.push('motivo da correção');
+  if(erros.length)return aviso('msgEd','Falta preencher: '+erros.join(', ')+'.','err');
+  // monta o resumo do que mudou
+  const mud=[];
+  CAMPOS_ED.forEach(([k,,n])=>{if((v[k]||'')!==novo[k])mud.push(`${n}: "${v[k]||'—'}" → "${novo[k]||'—'}"`);});
+  ITENS.forEach(i=>{const a=v.itens?.[i.k]||0,b=itens[i.k]||0;if(a!==b)mud.push(`${i.n}: ${fmt(a)} → ${fmt(b)}`);});
+  if(!mud.length)return aviso('msgEd','Nada foi alterado.','inf');
+  const a=agoraBR(),hk='h'+Date.now(),id=v.id;
+  $('btnEdSalva').disabled=true;
+  try{
+    const r=await db.ref('vales/'+id).transaction(cur=>{
+      if(cur===null)return cur;
+      if(cur.status!=='Aberto')return;          // foi pago/cancelado no meio do caminho
+      Object.assign(cur,novo);
+      cur.itens=itens;cur.total=somaItens(itens);
+      cur.historico=cur.historico||{};
+      cur.historico[hk]={ts:Date.now(),data:a.iso,hora:a.hora,usuario:CU.nome,motivo,resumo:mud.join(' · ')};
+      cur.versao=(cur.versao||1)+1;
+      return cur;
+    });
+    const fim=r.snapshot.val();
+    if(!r.committed||!fim||!fim.historico||!fim.historico[hk]){aviso('msgEd','Não foi possível salvar: o vale já foi pago ou cancelado.','err');return;}
+    await db.ref('abertos/'+id).set({id,data:fim.data,empresa:fim.empresa,setor:fim.setor,itens:fim.itens,total:fim.total});
+    fechar('ovlEdit');_det=fim;_listaTs=0;carregarLista(true);
+    aviso('msgCons',`Vale <b>${esc(id)}</b> corrigido.`,'ok');
+    setTimeout(()=>imprimirVale(fim,'VIA CORRIGIDA · SUBSTITUI A FOLHA ANTERIOR'),300);
+  }catch(e){aviso('msgEd','Erro: '+esc(e.message),'err');}
+  finally{$('btnEdSalva').disabled=false;}
+}
+async function excluirVale(){
+  const v=_det;if(!v||CU.role!=='adm'||v.status!=='Aberto')return;
+  const conf=prompt(`Excluir o vale ${v.id}?\nO número NÃO volta a ser usado e uma cópia fica no registro de excluídos.\n\nDigite o número do vale para confirmar:`);
+  if(conf===null)return;
+  if(normNum(conf)!==v.id)return alert('Número não confere. Nada foi excluído.');
+  const motivo=lim(prompt('Motivo da exclusão (obrigatório):')||'');
+  if(!motivo)return;
+  const a=agoraBR();let copia=null;
+  try{
+    const r=await db.ref('vales/'+v.id).transaction(cur=>{
+      if(cur===null)return cur;
+      if(cur.status!=='Aberto')return;
+      copia=cur;return null;                    // apaga o vale
+    });
+    if(!r.committed||r.snapshot.val()!==null||!copia){alert('Não foi possível excluir: o vale já foi pago ou alterado.');return;}
+    await db.ref().update({
+      ['excluidos/'+v.id]:{...copia,exclusao:{data:a.iso,hora:a.hora,ts:Date.now(),usuario:CU.nome,motivo}},
+      ['abertos/'+v.id]:null
+    });
+    fechar('ovlDet');_listaTs=0;carregarLista(true);
+    aviso('msgCons',`Vale <b>${esc(v.id)}</b> excluído. Cópia guardada no registro de excluídos.`,'ok');
+  }catch(e){alert('Erro ao excluir: '+e.message);}
 }
 
 // ═══════════════════════════════════════════════════════
