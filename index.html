@@ -312,6 +312,9 @@ const EMPRESA = {
 const TXT_COMPROMISSO = 'O GRUPO FARTURA DE HORTIFRUTI SA (REDE OBA), SE COMPROMETE POR MEIO DESTE DOCUMENTO FAZER A DEVOLUÇÃO REFERENTE AOS MATERIAIS DESCRITOS ABAIXO DENTRO DO PERÍODO DE 12 MESES A CONTAR DA DATA DE EMISSÃO.';
 const TXT_OBS = 'INFORMAMOS QUE A RETIRADA DOS ITENS DESCRITOS ACIMA DEVE SER PREVIAMENTE AGENDADA.<br>PARA QUE O DOCUMENTO TENHA VALIDADE, É NECESSÁRIO TER O CARIMBO E ASSINATURA DO RECEBIMENTO OBA E LOG. REVERSA OBA.<br>E-MAIL: logisticareversa@redeoba.com.br<br>19 99865-8101 CINTHIA BATISTA / 19 99744-9763 HOBEDE SOARES';
 
+// helper usado já no primeiro callback do Firebase (não pode ficar depois)
+const $=id=>document.getElementById(id);
+
 // ═══════════════════════════════════════════════════════
 // FIREBASE
 // ═══════════════════════════════════════════════════════
@@ -331,7 +334,6 @@ db.ref('.info/connected').on('value',s=>{
 // ═══════════════════════════════════════════════════════
 // UTILITÁRIOS
 // ═══════════════════════════════════════════════════════
-const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=n=>(Number(n)||0).toLocaleString('pt-BR');
 const lim=s=>String(s==null?'':s).replace(/\s+/g,' ').trim();
